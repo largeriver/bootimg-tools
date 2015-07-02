@@ -89,6 +89,7 @@ int main(int argc, char **argv)
     char *kernel_fn = "kernel";
     char *ramdisk_fn = "ramdisk.cpio.gz";
     char *second_fn = "second_bootloader";
+	char *dt_fn = "data_tree";
     char *bootimg = 0;
     unsigned offset;
 
@@ -136,6 +137,11 @@ int main(int argc, char **argv)
         goto fail;
     }
 
+	int n = (hdr->kernel_size + hdr->page_size - 1) /hdr->page_size;
+	int m = (hdr->ramdisk_size + hdr->page_size - 1) /hdr->page_size;
+	int o = (hdr->second_size + hdr->page_size - 1) /hdr->page_size;
+	//int p = (hdr->dt_size + hdr->page_size - 1) /hdr->page_size;
+
     if(hdr->kernel_size != 0) {
         offset = hdr->page_size;
         if (save_file(kernel_fn, &((char *)file_data)[offset],
@@ -143,35 +149,46 @@ int main(int argc, char **argv)
             fprintf(stderr,"error: could not save kernel '%s'\n", kernel_fn);
             return 1;
         }
-        printf("kernel written to '%s' (%d bytes)\n", kernel_fn, 
-            hdr->kernel_size);
+        printf("kernel written to '%s' (%d bytes),offset(%x)\n", kernel_fn, 
+            hdr->kernel_size,offset);
     }
 
     if(hdr->ramdisk_size != 0) {
-        offset = ((hdr->kernel_size + 2*hdr->page_size - 1) /
-            hdr->page_size) * hdr->page_size;
+		offset = (1+n) * hdr->page_size;
         if (save_file(ramdisk_fn, &((char *)file_data)[offset],
             hdr->ramdisk_size) != hdr->ramdisk_size) {
             fprintf(stderr,"error: could not save ramdisk '%s'\n",
                 ramdisk_fn);
             return 1;
         }
-        printf("ramdisk written to '%s' (%d bytes)\n", ramdisk_fn,
-            hdr->ramdisk_size);
+        printf("ramdisk written to '%s' (%d bytes),offset(%x)\n", ramdisk_fn,
+            hdr->ramdisk_size,offset);
     }
 
     if(hdr->second_size != 0) {
-        offset = ((hdr->kernel_size + hdr->ramdisk_size
-            + 2*hdr->page_size - 1) / hdr->page_size) * hdr->page_size;
+        offset = (1+n+m) * hdr->page_size;
+
         if (save_file(second_fn, &((char *)file_data)[offset],
             hdr->second_size) != hdr->second_size) {
             fprintf(stderr,"error: could not save second bootloader '%s'\n",
                 second_fn);
             return 1;
         }
-        printf("second bootloader written to '%s' (%d bytes)\n",
-            second_fn, hdr->second_size);
+        printf("second bootloader written to '%s' (%d bytes),offset(%x)\n",
+            second_fn, hdr->second_size,offset);
     }
+
+	if(hdr->dt_size != 0){
+        offset = (1+n+m+o) * hdr->page_size;
+        if (save_file(dt_fn, &((char *)file_data)[offset],
+            hdr->dt_size) != hdr->dt_size) {
+            fprintf(stderr,"error: could not save device tree image '%s'\n",
+                dt_fn);
+            return 1;
+        }
+        printf("dt written to '%s' (%d bytes),offset(%x)\n",
+            dt_fn, hdr->dt_size,offset);
+	}
 
     /* Ideally, we'd also check the SHA sums here */
 
@@ -182,20 +199,30 @@ int main(int argc, char **argv)
     }
     printf("--kernel_offset 0x%08x --ramdisk_offset 0x%08x ",
         hdr->kernel_addr, hdr->ramdisk_addr);
+
     printf("--second_offset 0x%08x --tags_offset 0x%08x ",
          hdr->second_addr, hdr->tags_addr);
+
     if(hdr->cmdline[0] != 0) {
         printf("--cmdline '%s%s' ", hdr->cmdline, hdr->extra_cmdline);
     }
-    if(hdr->kernel_size != 0) {
+    
+	if(hdr->kernel_size != 0) {
         printf("--kernel %s ", kernel_fn);
     }
-    if(hdr->ramdisk_size != 0) {
+    
+	if(hdr->ramdisk_size != 0) {
         printf("--ramdisk %s ", ramdisk_fn);
     }
-    if(hdr->second_size != 0) {
+    
+	if(hdr->second_size != 0) {
         printf("--second %s ", second_fn);
     }
+
+	if(hdr->dt_size != 0) {
+        printf("--dt %s ", dt_fn);
+    }
+
     printf("-o %s\n", bootimg);
 
     free(file_data);
